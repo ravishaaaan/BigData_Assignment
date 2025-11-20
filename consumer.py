@@ -1,11 +1,12 @@
 """
 Kafka Avro Consumer for Order Messages.
 Consumes orders from the 'orders' topic and calculates running average of prices.
-Includes error simulation for testing fault tolerance.
+Includes error simulation and retry logic with exponential backoff.
 """
 
 import json
 import random
+import time
 from confluent_kafka import DeserializingConsumer
 from confluent_kafka.serialization import StringDeserializer
 from confluent_kafka.schema_registry import SchemaRegistryClient
@@ -140,6 +141,58 @@ def process_message(order, calculator):
     return new_average
 
 
+def process_message_with_retry(order, calculator):
+    """
+    Process a message with retry logic for transient errors.
+    
+    Implements exponential backoff retry pattern:
+    - Retryable errors (ConnectionError): Retry up to MAX_RETRIES times
+    - Non-retryable errors (ValueError): Raise immediately without retry
+    
+    Args:
+        order (dict): The deserialized order message
+        calculator (RunningAverageCalculator): The calculator instance
+        
+    Returns:
+        float: The updated running average
+        
+    Raises:
+        ValueError: Non-retryable error (poison pill)
+        ConnectionError: After MAX_RETRIES exhausted
+    """
+    attempt = 0
+    last_error = None
+    
+    while attempt <= config.MAX_RETRIES:
+        try:
+            # Attempt to process the message
+            return process_message(order, calculator)
+            
+        except ValueError as e:
+            # Non-retryable error - fail immediately
+            print(f"   ❌ Non-retryable error (ValueError) - will not retry")
+            raise
+            
+        except ConnectionError as e:
+            last_error = e
+            attempt += 1
+            
+            if attempt <= config.MAX_RETRIES:
+                # Calculate backoff delay (exponential: 1s, 2s, 4s...)
+                backoff = config.RETRY_BACKOFF_SECONDS * (2 ** (attempt - 1))
+                print(f"   ⚠️ Retryable error (ConnectionError) - Attempt {attempt}/{config.MAX_RETRIES}")
+                print(f"   ⏳ Retrying in {backoff} seconds...")
+                time.sleep(backoff)
+            else:
+                # Max retries exhausted
+                print(f"   ❌ Max retries ({config.MAX_RETRIES}) exhausted")
+                raise
+    
+    # Should never reach here, but just in case
+    if last_error:
+        raise last_error
+
+
 def main():
     """
     Main consumer loop.
@@ -177,9 +230,9 @@ def main():
             message_count += 1
             order = msg.value()
             
-            # Process message (includes error simulation)
+            # Process message with retry logic
             try:
-                new_average = process_message(order, calculator)
+                new_average = process_message_with_retry(order, calculator)
                 
                 # Display message details
                 print(f"📦 [Message #{message_count}] Consumed order:")
@@ -190,13 +243,20 @@ def main():
                 print(f"   📍 Partition: {msg.partition()} | Offset: {msg.offset()}")
                 print()
                 
-            except (ValueError, ConnectionError) as e:
-                # For now, just log the error - Steps 6 & 7 will handle these properly
-                print(f"🔥 ERROR encountered:")
+            except ConnectionError as e:
+                # Retries exhausted for ConnectionError
+                print(f"🔥 RETRY EXHAUSTED - ConnectionError:")
                 print(f"   {str(e)}")
                 print(f"   OrderID: {order['orderId']}")
-                print(f"   Error Type: {type(e).__name__}")
-                print(f"   ⚠️ Message processing failed - will handle in Steps 6 & 7")
+                print(f"   ⚠️ Will be handled by DLQ in Step 7")
+                print()
+                
+            except ValueError as e:
+                # Non-retryable error (poison pill)
+                print(f"🔥 POISON PILL - ValueError:")
+                print(f"   {str(e)}")
+                print(f"   OrderID: {order['orderId']}")
+                print(f"   ⚠️ Will be sent to DLQ in Step 7")
                 print()
             
     except KeyboardInterrupt:

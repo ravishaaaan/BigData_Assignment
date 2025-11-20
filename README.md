@@ -104,7 +104,7 @@ Stop with `Ctrl+C`.
 - [x] STEP 3: The Producer (producer.py)
 - [x] STEP 4: Basic Consumer & Aggregation (consumer.py)
 - [x] STEP 5: Error Simulation Wrapper
-- [ ] STEP 6: Retry Logic
+- [x] STEP 6: Retry Logic
 - [ ] STEP 7: Dead Letter Queue (DLQ)
 
 ## ## VS Code
@@ -113,7 +113,7 @@ Stop with `Ctrl+C`.
 
 ---
 
-**Project Status:** STEP 5 Complete ✅
+**Project Status:** STEP 6 Complete ✅
 
 ### Files Structure
 ```
