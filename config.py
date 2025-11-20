@@ -1,8 +1,4 @@
-"""
-Configuration settings for Kafka Producer-Consumer system.
-Centralized configuration for easy management across modules.
-"""
-
+# Configuration settings for the Kafka-based order processing application
 BOOTSTRAP_SERVERS = 'localhost:9092'
 
 SCHEMA_REGISTRY_URL = 'http://localhost:8081'
