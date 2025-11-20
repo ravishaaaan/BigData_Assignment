@@ -64,6 +64,16 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+### 3. Run the Producer
+
+Start the producer (sends 1 message/second):
+
+```zsh
+python producer.py
+```
+
+Stop with `Ctrl+C`.
+
 ## Infrastructure Details
 
 - **Kafka Broker:** localhost:9092
@@ -74,7 +84,7 @@ pip install -r requirements.txt
 
 - [x] STEP 1: Infrastructure Setup (docker-compose.yml)
 - [x] STEP 2: Schema & Configuration (order.avsc, config.py)
-- [ ] STEP 3: The Producer (producer.py)
+- [x] STEP 3: The Producer (producer.py)
 - [ ] STEP 4: Basic Consumer & Aggregation (consumer.py)
 - [ ] STEP 5: Error Simulation Wrapper
 - [ ] STEP 6: Retry Logic
@@ -86,7 +96,7 @@ pip install -r requirements.txt
 
 ---
 
-**Project Status:** STEP 2 Complete ✅
+**Project Status:** STEP 3 Complete ✅
 
 ### Files Structure
 ```
@@ -94,6 +104,8 @@ Bigdata/
 ├── docker-compose.yml    # Kafka infrastructure
 ├── order.avsc            # Avro schema definition
 ├── config.py             # Shared configuration
+├── producer.py           # Avro producer (generates orders)
+├── requirements.txt      # Python dependencies
 ├── .venv/                # Python virtual environment
 └── README.md
 ```
