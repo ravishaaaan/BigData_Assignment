@@ -73,7 +73,7 @@ pip install -r requirements.txt
 ## Development Roadmap
 
 - [x] STEP 1: Infrastructure Setup (docker-compose.yml)
-- [ ] STEP 2: Schema & Configuration (order.avsc, config.py)
+- [x] STEP 2: Schema & Configuration (order.avsc, config.py)
 - [ ] STEP 3: The Producer (producer.py)
 - [ ] STEP 4: Basic Consumer & Aggregation (consumer.py)
 - [ ] STEP 5: Error Simulation Wrapper
@@ -86,4 +86,14 @@ pip install -r requirements.txt
 
 ---
 
-**Project Status:** STEP 1 Complete ✅
+**Project Status:** STEP 2 Complete ✅
+
+### Files Structure
+```
+Bigdata/
+├── docker-compose.yml    # Kafka infrastructure
+├── order.avsc            # Avro schema definition
+├── config.py             # Shared configuration
+├── .venv/                # Python virtual environment
+└── README.md
+```

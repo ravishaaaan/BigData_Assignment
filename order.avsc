@@ -1,0 +1,22 @@
+{
+  "type": "record",
+  "name": "Order",
+  "namespace": "com.bigdata.orders",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Unique identifier for the order"
+    },
+    {
+      "name": "product",
+      "type": "string",
+      "doc": "Product name or SKU"
+    },
+    {
+      "name": "price",
+      "type": "float",
+      "doc": "Order price in USD"
+    }
+  ]
+}
