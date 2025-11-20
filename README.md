@@ -66,9 +66,10 @@ pip install -r requirements.txt
 
 ### 3. Run the Producer
 
-Start the producer (sends 1 message/second):
+**Important:** Always activate the virtual environment first!
 
 ```zsh
+source .venv/bin/activate
 python producer.py
 ```
 
