@@ -1,9 +1,11 @@
 """
 Kafka Avro Consumer for Order Messages.
 Consumes orders from the 'orders' topic and calculates running average of prices.
+Includes error simulation for testing fault tolerance.
 """
 
 import json
+import random
 from confluent_kafka import DeserializingConsumer
 from confluent_kafka.serialization import StringDeserializer
 from confluent_kafka.schema_registry import SchemaRegistryClient
@@ -93,6 +95,51 @@ def create_consumer():
     return DeserializingConsumer(consumer_config)
 
 
+def process_message(order, calculator):
+    """
+    Process an order message and update the running average.
+    
+    This function includes error simulation (chaos monkey) to test
+    fault tolerance mechanisms in Steps 6 & 7.
+    
+    Args:
+        order (dict): The deserialized order message
+        calculator (RunningAverageCalculator): The calculator instance
+        
+    Returns:
+        float: The updated running average
+        
+    Raises:
+        ValueError: Simulated data validation error (non-retryable)
+        ConnectionError: Simulated temporary service error (retryable)
+    """
+    # CHAOS MONKEY: Simulate errors for testing
+    # 10% chance of error occurrence
+    if random.random() < config.ERROR_SIMULATION_RATE:
+        error_type = random.choice(['validation', 'connection'])
+        
+        if error_type == 'validation':
+            # Simulate a data validation error (e.g., corrupt data, invalid price)
+            # This is a non-retryable "poison pill" error
+            raise ValueError(
+                f"❌ SIMULATED ERROR: Invalid data for order {order['orderId']} - "
+                f"Price validation failed: {order['price']}"
+            )
+        else:
+            # Simulate a temporary connection error (e.g., database unavailable)
+            # This is a retryable error
+            raise ConnectionError(
+                f"⚠️ SIMULATED ERROR: Temporary service unavailable while processing "
+                f"order {order['orderId']}"
+            )
+    
+    # Normal processing: extract price and update running average
+    price = order['price']
+    new_average = calculator.add_price(price)
+    
+    return new_average
+
+
 def main():
     """
     Main consumer loop.
@@ -130,18 +177,27 @@ def main():
             message_count += 1
             order = msg.value()
             
-            # Extract price and update running average
-            price = order['price']
-            new_average = calculator.add_price(price)
-            
-            # Display message details
-            print(f"📦 [Message #{message_count}] Consumed order:")
-            print(f"   OrderID: {order['orderId']}")
-            print(f"   Product: {order['product']}")
-            print(f"   Price: ${price:.2f}")
-            print(f"   🔢 Running Average: ${new_average:.2f} (from {calculator.count} orders)")
-            print(f"   📍 Partition: {msg.partition()} | Offset: {msg.offset()}")
-            print()
+            # Process message (includes error simulation)
+            try:
+                new_average = process_message(order, calculator)
+                
+                # Display message details
+                print(f"📦 [Message #{message_count}] Consumed order:")
+                print(f"   OrderID: {order['orderId']}")
+                print(f"   Product: {order['product']}")
+                print(f"   Price: ${order['price']:.2f}")
+                print(f"   🔢 Running Average: ${new_average:.2f} (from {calculator.count} orders)")
+                print(f"   📍 Partition: {msg.partition()} | Offset: {msg.offset()}")
+                print()
+                
+            except (ValueError, ConnectionError) as e:
+                # For now, just log the error - Steps 6 & 7 will handle these properly
+                print(f"🔥 ERROR encountered:")
+                print(f"   {str(e)}")
+                print(f"   OrderID: {order['orderId']}")
+                print(f"   Error Type: {type(e).__name__}")
+                print(f"   ⚠️ Message processing failed - will handle in Steps 6 & 7")
+                print()
             
     except KeyboardInterrupt:
         print("\n\n⏹️  Consumer stopped by user")
