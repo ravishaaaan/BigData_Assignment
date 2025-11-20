@@ -91,6 +91,17 @@ The consumer will:
 
 Stop with `Ctrl+C`.
 
+### 5. Monitor the Dead Letter Queue (Optional)
+
+**In a third terminal**, monitor failed messages:
+
+```zsh
+source .venv/bin/activate
+python dlq_monitor.py
+```
+
+This will display all messages that failed processing and were sent to the DLQ.
+
 ## Infrastructure Details
 
 - **Kafka Broker:** localhost:9092
@@ -105,7 +116,7 @@ Stop with `Ctrl+C`.
 - [x] STEP 4: Basic Consumer & Aggregation (consumer.py)
 - [x] STEP 5: Error Simulation Wrapper
 - [x] STEP 6: Retry Logic
-- [ ] STEP 7: Dead Letter Queue (DLQ)
+- [x] STEP 7: Dead Letter Queue (DLQ)
 
 ## ## VS Code
 
@@ -113,7 +124,7 @@ Stop with `Ctrl+C`.
 
 ---
 
-**Project Status:** STEP 6 Complete ✅
+**Project Status:** ✅ ALL STEPS COMPLETE - Production Ready!
 
 ### Files Structure
 ```
@@ -122,7 +133,8 @@ Bigdata/
 ├── order.avsc            # Avro schema definition
 ├── config.py             # Shared configuration
 ├── producer.py           # Avro producer (generates orders)
-├── consumer.py           # Avro consumer (running average)
+├── consumer.py           # Avro consumer (running average + DLQ)
+├── dlq_monitor.py        # DLQ monitoring tool
 ├── requirements.txt      # Python dependencies
 ├── .venv/                # Python virtual environment
 └── README.md

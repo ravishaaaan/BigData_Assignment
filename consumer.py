@@ -1,16 +1,16 @@
 """
 Kafka Avro Consumer for Order Messages.
 Consumes orders from the 'orders' topic and calculates running average of prices.
-Includes error simulation and retry logic with exponential backoff.
+Includes error simulation, retry logic with exponential backoff, and Dead Letter Queue.
 """
 
 import json
 import random
 import time
-from confluent_kafka import DeserializingConsumer
-from confluent_kafka.serialization import StringDeserializer
+from confluent_kafka import DeserializingConsumer, SerializingProducer
+from confluent_kafka.serialization import StringDeserializer, StringSerializer
 from confluent_kafka.schema_registry import SchemaRegistryClient
-from confluent_kafka.schema_registry.avro import AvroDeserializer
+from confluent_kafka.schema_registry.avro import AvroDeserializer, AvroSerializer
 
 import config
 
@@ -59,6 +59,67 @@ def load_avro_schema(schema_path):
     """Load Avro schema from file."""
     with open(schema_path, 'r') as f:
         return json.dumps(json.load(f))
+
+
+def create_dlq_producer():
+    """
+    Create a producer for sending failed messages to the Dead Letter Queue.
+    
+    Returns:
+        SerializingProducer: Configured Kafka producer for DLQ
+    """
+    # Initialize Schema Registry client
+    schema_registry_client = SchemaRegistryClient({
+        'url': config.SCHEMA_REGISTRY_URL
+    })
+    
+    # Load Avro schema
+    avro_schema_str = load_avro_schema('order.avsc')
+    
+    # Create Avro serializer for the value
+    avro_serializer = AvroSerializer(
+        schema_registry_client,
+        avro_schema_str
+    )
+    
+    # Producer configuration for DLQ
+    producer_config = {
+        'bootstrap.servers': config.BOOTSTRAP_SERVERS,
+        'key.serializer': StringSerializer('utf_8'),
+        'value.serializer': avro_serializer,
+        'acks': 'all'
+    }
+    
+    return SerializingProducer(producer_config)
+
+
+def send_to_dlq(dlq_producer, order, error_message, error_type):
+    """
+    Send a failed message to the Dead Letter Queue.
+    
+    Args:
+        dlq_producer: The DLQ producer instance
+        order (dict): The failed order message
+        error_message (str): The error message/reason
+        error_type (str): The type of error (ValueError, ConnectionError, etc.)
+    """
+    try:
+        # Produce to DLQ topic
+        dlq_producer.produce(
+            topic=config.ORDERS_DLQ_TOPIC,
+            key=order['orderId'],
+            value=order
+        )
+        
+        # Ensure message is sent
+        dlq_producer.flush()
+        
+        print(f"   ☠️ Sent to DLQ: {config.ORDERS_DLQ_TOPIC}")
+        print(f"   Reason: {error_type} - {error_message}")
+        
+    except Exception as e:
+        print(f"   ❌ CRITICAL: Failed to send to DLQ: {e}")
+        # In production, this would trigger an alert
 
 
 def create_consumer():
@@ -196,20 +257,25 @@ def process_message_with_retry(order, calculator):
 def main():
     """
     Main consumer loop.
-    Reads orders and calculates running average of prices.
+    Reads orders, calculates running average, handles errors with retry and DLQ.
     """
     print("🚀 Starting Kafka Avro Consumer...")
     print(f"📡 Connected to: {config.BOOTSTRAP_SERVERS}")
     print(f"📋 Schema Registry: {config.SCHEMA_REGISTRY_URL}")
     print(f"📥 Consuming from topic: {config.ORDERS_TOPIC}")
     print(f"👥 Consumer Group: {config.CONSUMER_GROUP_ID}")
+    print(f"☠️ DLQ Topic: {config.ORDERS_DLQ_TOPIC}")
     print("-" * 60)
     
     consumer = create_consumer()
     consumer.subscribe([config.ORDERS_TOPIC])
     
+    # Create DLQ producer
+    dlq_producer = create_dlq_producer()
+    
     calculator = RunningAverageCalculator()
     message_count = 0
+    dlq_count = 0
     
     try:
         print("\n⏳ Waiting for messages... (Press Ctrl+C to stop)\n")
@@ -244,19 +310,27 @@ def main():
                 print()
                 
             except ConnectionError as e:
-                # Retries exhausted for ConnectionError
+                # Retries exhausted for ConnectionError - send to DLQ
+                dlq_count += 1
                 print(f"🔥 RETRY EXHAUSTED - ConnectionError:")
                 print(f"   {str(e)}")
                 print(f"   OrderID: {order['orderId']}")
-                print(f"   ⚠️ Will be handled by DLQ in Step 7")
+                
+                # Send to DLQ
+                send_to_dlq(dlq_producer, order, str(e), 'ConnectionError')
+                print(f"   ✅ Offset will be committed - moving to next message")
                 print()
                 
             except ValueError as e:
-                # Non-retryable error (poison pill)
+                # Non-retryable error (poison pill) - send to DLQ
+                dlq_count += 1
                 print(f"🔥 POISON PILL - ValueError:")
                 print(f"   {str(e)}")
                 print(f"   OrderID: {order['orderId']}")
-                print(f"   ⚠️ Will be sent to DLQ in Step 7")
+                
+                # Send to DLQ
+                send_to_dlq(dlq_producer, order, str(e), 'ValueError')
+                print(f"   ✅ Offset will be committed - moving to next message")
                 print()
             
     except KeyboardInterrupt:
@@ -266,15 +340,18 @@ def main():
         raise
     finally:
         # Close consumer to commit final offsets
-        print("\n🔄 Closing consumer...")
+        print("\n🔄 Closing consumer and DLQ producer...")
         consumer.close()
+        dlq_producer.flush()
         
         # Print final statistics
         stats = calculator.get_stats()
         print("\n" + "=" * 60)
         print("📊 FINAL STATISTICS")
         print("=" * 60)
-        print(f"Total Orders Processed: {stats['count']}")
+        print(f"Total Messages Received: {message_count}")
+        print(f"Successfully Processed: {stats['count']}")
+        print(f"Sent to DLQ: {dlq_count}")
         print(f"Total Revenue: ${stats['sum']:.2f}")
         print(f"Average Order Value: ${stats['average']:.2f}")
         print("=" * 60)
