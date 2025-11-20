@@ -1,8 +1,3 @@
-"""
-Kafka Avro Producer for Order Messages.
-Generates synthetic order data and publishes to the 'orders' topic.
-"""
-
 import json
 import time
 import random
@@ -15,7 +10,6 @@ from confluent_kafka.schema_registry.avro import AvroSerializer
 import config
 
 
-# Sample product catalog for realistic data generation
 PRODUCTS = [
     "Laptop", "Mouse", "Keyboard", "Monitor", "Headphones",
     "Webcam", "USB Cable", "External SSD", "Docking Station", "Chair"
@@ -60,22 +54,18 @@ def create_producer():
     Returns:
         SerializingProducer: Configured Kafka producer with Avro serialization
     """
-    # Initialize Schema Registry client
     schema_registry_client = SchemaRegistryClient({
         'url': config.SCHEMA_REGISTRY_URL
     })
     
-    # Load Avro schema
     avro_schema = load_avro_schema('order.avsc')
     avro_schema_str = json.dumps(avro_schema)
     
-    # Create Avro serializer for the value
     avro_serializer = AvroSerializer(
         schema_registry_client,
         avro_schema_str
     )
     
-    # Producer configuration
     producer_config = {
         'bootstrap.servers': config.BOOTSTRAP_SERVERS,
         'key.serializer': StringSerializer('utf_8'),
@@ -102,7 +92,6 @@ def main():
     
     try:
         while True:
-            # Generate order
             order = generate_order()
             message_count += 1
             
@@ -111,7 +100,6 @@ def main():
             print(f"   Product: {order['product']}")
             print(f"   Price: ${order['price']:.2f}")
             
-            # Produce message (async)
             producer.produce(
                 topic=config.ORDERS_TOPIC,
                 key=order['orderId'],
@@ -119,10 +107,8 @@ def main():
                 on_delivery=delivery_report
             )
             
-            # Trigger delivery report callbacks
             producer.poll(0)
             
-            # Wait 1 second before next message
             time.sleep(1)
             
     except KeyboardInterrupt:
@@ -131,7 +117,6 @@ def main():
         print(f"\n❌ Producer error: {e}")
         raise
     finally:
-        # Wait for any outstanding messages to be delivered
         print("\n🔄 Flushing remaining messages...")
         producer.flush()
         print(f"✅ Producer shut down gracefully. Total messages sent: {message_count}")

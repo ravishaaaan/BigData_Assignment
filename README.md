@@ -137,5 +137,27 @@ Bigdata/
 ├── dlq_monitor.py        # DLQ monitoring tool
 ├── requirements.txt      # Python dependencies
 ├── .venv/                # Python virtual environment
-└── README.md
+├── README.md
+└── DEMO_GUIDE.md         # Step-by-step live demonstration guide
 ```
+
+---
+
+## 🎬 Live System Demonstration
+
+For a **complete step-by-step guide** to demonstrate all features, see **[DEMO_GUIDE.md](DEMO_GUIDE.md)**.
+
+The demo guide includes:
+- Infrastructure setup verification
+- Basic producer-consumer flow
+- Error simulation and retry logic
+- Dead Letter Queue monitoring
+- System verification and metrics
+- Advanced features (consumer groups, offset management)
+
+**Quick Demo (5 minutes):**
+1. `docker compose up -d`
+2. Terminal 1: `source .venv/bin/activate && python producer.py`
+3. Terminal 2: `source .venv/bin/activate && python consumer.py`
+4. Terminal 3: `source .venv/bin/activate && python dlq_monitor.py`
+5. Watch the system handle errors automatically!

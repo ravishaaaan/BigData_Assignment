@@ -25,27 +25,23 @@ def create_dlq_consumer():
     Returns:
         DeserializingConsumer: Configured Kafka consumer for DLQ monitoring
     """
-    # Initialize Schema Registry client
     schema_registry_client = SchemaRegistryClient({
         'url': config.SCHEMA_REGISTRY_URL
     })
     
-    # Load Avro schema
     avro_schema_str = load_avro_schema('order.avsc')
     
-    # Create Avro deserializer for the value
     avro_deserializer = AvroDeserializer(
         schema_registry_client,
         avro_schema_str
     )
     
-    # Consumer configuration for DLQ monitoring
     consumer_config = {
         'bootstrap.servers': config.BOOTSTRAP_SERVERS,
         'key.deserializer': StringDeserializer('utf_8'),
         'value.deserializer': avro_deserializer,
         'group.id': 'dlq-monitor-group',
-        'auto.offset.reset': 'earliest',  # Read all DLQ messages from beginning
+        'auto.offset.reset': 'earliest',
         'enable.auto.commit': True
     }
     
@@ -72,22 +68,18 @@ def main():
         print("\n⏳ Waiting for DLQ messages... (Press Ctrl+C to stop)\n")
         
         while True:
-            # Poll for messages (1 second timeout)
             msg = consumer.poll(timeout=1.0)
             
             if msg is None:
-                # No message available, continue polling
                 continue
             
             if msg.error():
                 print(f"❌ Consumer error: {msg.error()}")
                 continue
             
-            # Successfully received a DLQ message
             message_count += 1
             order = msg.value()
             
-            # Display DLQ message details
             print(f"☠️ [DLQ Message #{message_count}]")
             print(f"   OrderID: {order['orderId']}")
             print(f"   Product: {order['product']}")
@@ -102,7 +94,6 @@ def main():
         print(f"\n❌ DLQ Monitor error: {e}")
         raise
     finally:
-        # Close consumer
         print("\n🔄 Closing DLQ monitor...")
         consumer.close()
         

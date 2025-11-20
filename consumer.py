@@ -68,21 +68,17 @@ def create_dlq_producer():
     Returns:
         SerializingProducer: Configured Kafka producer for DLQ
     """
-    # Initialize Schema Registry client
     schema_registry_client = SchemaRegistryClient({
         'url': config.SCHEMA_REGISTRY_URL
     })
     
-    # Load Avro schema
     avro_schema_str = load_avro_schema('order.avsc')
     
-    # Create Avro serializer for the value
     avro_serializer = AvroSerializer(
         schema_registry_client,
         avro_schema_str
     )
     
-    # Producer configuration for DLQ
     producer_config = {
         'bootstrap.servers': config.BOOTSTRAP_SERVERS,
         'key.serializer': StringSerializer('utf_8'),
@@ -104,14 +100,12 @@ def send_to_dlq(dlq_producer, order, error_message, error_type):
         error_type (str): The type of error (ValueError, ConnectionError, etc.)
     """
     try:
-        # Produce to DLQ topic
         dlq_producer.produce(
             topic=config.ORDERS_DLQ_TOPIC,
             key=order['orderId'],
             value=order
         )
         
-        # Ensure message is sent
         dlq_producer.flush()
         
         print(f"   ☠️ Sent to DLQ: {config.ORDERS_DLQ_TOPIC}")
@@ -119,7 +113,6 @@ def send_to_dlq(dlq_producer, order, error_message, error_type):
         
     except Exception as e:
         print(f"   ❌ CRITICAL: Failed to send to DLQ: {e}")
-        # In production, this would trigger an alert
 
 
 def create_consumer():
@@ -129,21 +122,17 @@ def create_consumer():
     Returns:
         DeserializingConsumer: Configured Kafka consumer with Avro deserialization
     """
-    # Initialize Schema Registry client
     schema_registry_client = SchemaRegistryClient({
         'url': config.SCHEMA_REGISTRY_URL
     })
     
-    # Load Avro schema
     avro_schema_str = load_avro_schema('order.avsc')
     
-    # Create Avro deserializer for the value
     avro_deserializer = AvroDeserializer(
         schema_registry_client,
         avro_schema_str
     )
     
-    # Consumer configuration
     consumer_config = {
         'bootstrap.servers': config.BOOTSTRAP_SERVERS,
         'key.deserializer': StringDeserializer('utf_8'),
@@ -175,27 +164,20 @@ def process_message(order, calculator):
         ValueError: Simulated data validation error (non-retryable)
         ConnectionError: Simulated temporary service error (retryable)
     """
-    # CHAOS MONKEY: Simulate errors for testing
-    # 10% chance of error occurrence
     if random.random() < config.ERROR_SIMULATION_RATE:
         error_type = random.choice(['validation', 'connection'])
         
         if error_type == 'validation':
-            # Simulate a data validation error (e.g., corrupt data, invalid price)
-            # This is a non-retryable "poison pill" error
             raise ValueError(
                 f"❌ SIMULATED ERROR: Invalid data for order {order['orderId']} - "
                 f"Price validation failed: {order['price']}"
             )
         else:
-            # Simulate a temporary connection error (e.g., database unavailable)
-            # This is a retryable error
             raise ConnectionError(
                 f"⚠️ SIMULATED ERROR: Temporary service unavailable while processing "
                 f"order {order['orderId']}"
             )
     
-    # Normal processing: extract price and update running average
     price = order['price']
     new_average = calculator.add_price(price)
     
@@ -226,11 +208,9 @@ def process_message_with_retry(order, calculator):
     
     while attempt <= config.MAX_RETRIES:
         try:
-            # Attempt to process the message
             return process_message(order, calculator)
             
         except ValueError as e:
-            # Non-retryable error - fail immediately
             print(f"   ❌ Non-retryable error (ValueError) - will not retry")
             raise
             
@@ -239,17 +219,14 @@ def process_message_with_retry(order, calculator):
             attempt += 1
             
             if attempt <= config.MAX_RETRIES:
-                # Calculate backoff delay (exponential: 1s, 2s, 4s...)
                 backoff = config.RETRY_BACKOFF_SECONDS * (2 ** (attempt - 1))
                 print(f"   ⚠️ Retryable error (ConnectionError) - Attempt {attempt}/{config.MAX_RETRIES}")
                 print(f"   ⏳ Retrying in {backoff} seconds...")
                 time.sleep(backoff)
             else:
-                # Max retries exhausted
                 print(f"   ❌ Max retries ({config.MAX_RETRIES}) exhausted")
                 raise
     
-    # Should never reach here, but just in case
     if last_error:
         raise last_error
 
@@ -270,7 +247,6 @@ def main():
     consumer = create_consumer()
     consumer.subscribe([config.ORDERS_TOPIC])
     
-    # Create DLQ producer
     dlq_producer = create_dlq_producer()
     
     calculator = RunningAverageCalculator()
@@ -281,26 +257,21 @@ def main():
         print("\n⏳ Waiting for messages... (Press Ctrl+C to stop)\n")
         
         while True:
-            # Poll for messages (1 second timeout)
             msg = consumer.poll(timeout=1.0)
             
             if msg is None:
-                # No message available, continue polling
                 continue
             
             if msg.error():
                 print(f"❌ Consumer error: {msg.error()}")
                 continue
             
-            # Successfully received a message
             message_count += 1
             order = msg.value()
             
-            # Process message with retry logic
             try:
                 new_average = process_message_with_retry(order, calculator)
                 
-                # Display message details
                 print(f"📦 [Message #{message_count}] Consumed order:")
                 print(f"   OrderID: {order['orderId']}")
                 print(f"   Product: {order['product']}")
@@ -310,25 +281,21 @@ def main():
                 print()
                 
             except ConnectionError as e:
-                # Retries exhausted for ConnectionError - send to DLQ
                 dlq_count += 1
                 print(f"🔥 RETRY EXHAUSTED - ConnectionError:")
                 print(f"   {str(e)}")
                 print(f"   OrderID: {order['orderId']}")
                 
-                # Send to DLQ
                 send_to_dlq(dlq_producer, order, str(e), 'ConnectionError')
                 print(f"   ✅ Offset will be committed - moving to next message")
                 print()
                 
             except ValueError as e:
-                # Non-retryable error (poison pill) - send to DLQ
                 dlq_count += 1
                 print(f"🔥 POISON PILL - ValueError:")
                 print(f"   {str(e)}")
                 print(f"   OrderID: {order['orderId']}")
                 
-                # Send to DLQ
                 send_to_dlq(dlq_producer, order, str(e), 'ValueError')
                 print(f"   ✅ Offset will be committed - moving to next message")
                 print()
@@ -339,12 +306,10 @@ def main():
         print(f"\n❌ Consumer error: {e}")
         raise
     finally:
-        # Close consumer to commit final offsets
         print("\n🔄 Closing consumer and DLQ producer...")
         consumer.close()
         dlq_producer.flush()
         
-        # Print final statistics
         stats = calculator.get_stats()
         print("\n" + "=" * 60)
         print("📊 FINAL STATISTICS")
