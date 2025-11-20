@@ -75,6 +75,22 @@ python producer.py
 
 Stop with `Ctrl+C`.
 
+### 4. Run the Consumer
+
+**In a separate terminal**, activate venv and run:
+
+```zsh
+source .venv/bin/activate
+python consumer.py
+```
+
+The consumer will:
+- Read messages from the `orders` topic
+- Calculate running average of prices
+- Display real-time statistics
+
+Stop with `Ctrl+C`.
+
 ## Infrastructure Details
 
 - **Kafka Broker:** localhost:9092
@@ -86,7 +102,7 @@ Stop with `Ctrl+C`.
 - [x] STEP 1: Infrastructure Setup (docker-compose.yml)
 - [x] STEP 2: Schema & Configuration (order.avsc, config.py)
 - [x] STEP 3: The Producer (producer.py)
-- [ ] STEP 4: Basic Consumer & Aggregation (consumer.py)
+- [x] STEP 4: Basic Consumer & Aggregation (consumer.py)
 - [ ] STEP 5: Error Simulation Wrapper
 - [ ] STEP 6: Retry Logic
 - [ ] STEP 7: Dead Letter Queue (DLQ)
@@ -97,7 +113,7 @@ Stop with `Ctrl+C`.
 
 ---
 
-**Project Status:** STEP 3 Complete ✅
+**Project Status:** STEP 4 Complete ✅
 
 ### Files Structure
 ```
@@ -106,6 +122,7 @@ Bigdata/
 ├── order.avsc            # Avro schema definition
 ├── config.py             # Shared configuration
 ├── producer.py           # Avro producer (generates orders)
+├── consumer.py           # Avro consumer (running average)
 ├── requirements.txt      # Python dependencies
 ├── .venv/                # Python virtual environment
 └── README.md
